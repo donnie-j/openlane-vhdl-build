@@ -11,7 +11,7 @@ echo clone all the things...
 mkdir src ; cd src
 
 git clone https://github.com/YosysHQ/icestorm.git &&
-git clone https://github.com/YosysHQ/yosys.git &&
+git clone --recursive https://github.com/YosysHQ/yosys.git &&
 git clone https://github.com/YosysHQ/nextpnr.git &&
 
 git clone https://github.com/ghdl/ghdl.git &&
@@ -41,34 +41,25 @@ patch -p1 <<EOF &&
  PROGRAM_PREFIX ?=
 EOF
 
-make -j$(nproc) &&
+make -j12 &&
 make install &&
 
 cd .. || exit 1
 
 echo build yosys
 
-git clone ../src/yosys &&
+git clone --recursive ../src/yosys &&
 cd yosys &&
 
-#echo checking out v0.28 0d6f4b068338c25f3de4ddab0747f714602037b5
-#git checkout --recurse-submodules 0d6f4b068338c25f3de4ddab0747f714602037b5
-echo checking out v0.29 9c5a60eb20104f7c320e263631c1371af9576911 &&
-git checkout --recurse-submodules 9c5a60eb20104f7c320e263631c1371af9576911 &&
+#echo checking out v0.48 aaa5347494801e9e3870b31387da59da24233f76 &&
+#git checkout --recurse-submodules aaa5347494801e9e3870b31387da59da24233f76 &&
+echo checking out v0.50 &&
+git checkout --recurse-submodules v0.50 &&
 
 patch -p1 << EOF &&
 diff --git a/Makefile b/Makefile
-index 826562fdf..b9e473d6c 100644
 --- a/Makefile
 +++ b/Makefile
-@@ -1,5 +1,5 @@
-
--CONFIG := clang
-+# CONFIG := clang
--# CONFIG := gcc
-+CONFIG := gcc
- # CONFIG := afl-gcc
- # CONFIG := emcc
 @@ -53,7 +53,7 @@ SANITIZER =
  PROGRAM_PREFIX :=
 
@@ -80,20 +71,21 @@ index 826562fdf..b9e473d6c 100644
  ifneq (\$(wildcard Makefile.conf),)
 EOF
 
-make -j$(nproc) &&
+make config-gcc
+make -j12 &&
 make install &&
 
 cd .. || exit 1
 
 echo build nextpnr
 
-git clone ../src/nextpnr &&
+mkdir nextpnr &&
 cd nextpnr &&
+mkdir ../../src/nextpnr/tests/gui &&
+touch ../../src/nextpnr/tests/gui/CMakeLists.txt &&
 
-# patch -p1 < ../../nextpnr.diff
-
-cmake . -DARCH="ice40" -DCMAKE_INSTALL_PREFIX=$PREFIX -DICESTORM_INSTALL_PREFIX=$PREFIX -DBUILD_GUI=OFF -DBUILD_PYTHON=OFF -DSTATIC_BUILD=ON &&
-make -j$(nproc) &&
+cmake ../../src/nextpnr -DARCH="ice40" -DCMAKE_INSTALL_PREFIX=$PREFIX -DICESTORM_INSTALL_PREFIX=$PREFIX -DBUILD_GUI=OFF -DBUILD_PYTHON=OFF -DSTATIC_BUILD=ON &&
+make -j12 &&
 make install &&
 
 cd .. || exit 1
@@ -103,15 +95,17 @@ echo build ghdl
 git clone ../src/ghdl &&
 cd ghdl &&
 
-echo checking out v3.0 7de967c51f352fe2d724dbec549b71a392e5ebae &&
-git checkout --recurse-submodules 7de967c51f352fe2d724dbec549b71a392e5ebae &&
+#echo checking out v4.1.0 7188e92cf3cc60f5d97cfe83bc2c85f0250373ab &&
+#git checkout --recurse-submodules 7188e92cf3cc60f5d97cfe83bc2c85f0250373ab &&
+echo checking out v5.0.1 &&
+git checkout --recurse-submodules v5.0.1 &&
 
 # On MacOS, gnat lives in /opt
 export PATH=/opt/gnat/bin:$PATH &&
 #./configure --prefix=$PREFIX                    # for mcode
-./configure --with-llvm-config --prefix=$PREFIX  # for llvm backend
+LDFLAGS="-L/opt/gcc-13.2.0-aarch64//lib/gcc/aarch64-apple-darwin21/13.2.0 -lgcc" PATH=$PATH:/opt/homebrew/Cellar/llvm/19.1.1/bin ./configure --with-llvm-config --prefix=$PREFIX  # for llvm backend
 
-make -j$(nproc) &&
+PATH=$PATH:/opt/homebrew/Cellar/llvm/19.1.1/bin make -j12 &&
 make install &&
 
 cd .. || exit 1

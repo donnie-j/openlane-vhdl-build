@@ -8,38 +8,7 @@ export PREFIX
 echo clone musl-cross-make
 
 git clone https://github.com/richfelker/musl-cross-make.git &&
-cd musl-cross-make &&
-
-echo patch for musl 1.2.4 &&
-
-patch -p1 << 'EOF' &&
---- a/Makefile
-+++ b/Makefile
-@@ -4,13 +4,13 @@ SOURCES = sources
- CONFIG_SUB_REV = 3d5db9ebe860
- BINUTILS_VER = 2.33.1
- GCC_VER = 9.4.0
--MUSL_VER = 1.2.3
-+MUSL_VER = 1.2.4
- GMP_VER = 6.1.2
- MPC_VER = 1.1.0
- MPFR_VER = 4.0.2
- LINUX_VER = headers-4.19.88-1
- 
--GNU_SITE = https://ftpmirror.gnu.org/gnu
-+GNU_SITE = https://ftp.gnu.org/gnu
- GCC_SITE = $(GNU_SITE)/gcc
- BINUTILS_SITE = $(GNU_SITE)/binutils
- GMP_SITE = $(GNU_SITE)/gmp
-diff --git a/hashes/musl-1.2.4.tar.gz.sha1 b/hashes/musl-1.2.4.tar.gz.sha1
-new file mode 100644
-index 0000000..0f94407
---- /dev/null
-+++ b/hashes/musl-1.2.4.tar.gz.sha1
-@@ -0,0 +1 @@
-+78eb982244b857dbacb2ead25cc0f631ce44204d  musl-1.2.4.tar.gz
-EOF
-
+cd musl-cross-make 
 echo config &&
 
 echo "OUTPUT = $PREFIX" > config.mak &&
@@ -62,7 +31,7 @@ EOF
 
 echo patch for vfork  &&
 
-mkdir patches/musl-1.2.4 && cat >> patches/musl-1.2.4/0001-nommu.patch << 'EOF' &&
+cat >> patches/musl-1.2.5/0001-nommu.patch << 'EOF' &&
 --- a/src/legacy/daemon.c
 +++ b/src/legacy/daemon.c
 @@ -17,3 +17,3 @@
@@ -122,7 +91,7 @@ EOF
 
 echo building sh2-fdpic linux toolchain &&
 
-make -j$(nproc) &&
+make -j12 &&
 
 echo install linux toolchain &&
 
@@ -207,7 +176,7 @@ mkdir bare-binutils &&
 cd bare-binutils &&
 
 ../musl-cross-make/build/local/sh2eb-linux-muslfdpic/src_binutils/configure --prefix=$PREFIX  --enable-deterministic-archives --target=sh2-elf --disable-separate-code --disable-werror &&
-make -j$(nproc) &&
+make -j12 &&
 
 echo install bare metal binutils &&
 make install &&
@@ -311,8 +280,8 @@ cd bare-gcc &&
 
 ../musl-cross-make/build/local/sh2eb-linux-muslfdpic/src_gcc/configure --prefix=$PREFIX  --target=sh2-elf --disable-bootstrap --disable-assembly --disable-werror --disable-libmudflap --disable-libsanitizer --disable-gnu-indirect-function --disable-libmpx --disable-libmudflap --disable-libstdcxx-pch --disable-ssp --disable-libssp --enable-languages=c,c++ --with-newlib --without-headers --disable-hosted-libstdcxx &&
 
-make -j$(nproc) all-gcc &&
-make -j$(nproc) all-target-libgcc &&
+make -j12 all-gcc &&
+make -j12 all-target-libgcc &&
 
 echo install bare metal compiler &&
 make install-strip-gcc &&
@@ -320,15 +289,3 @@ make install-strip-target-libgcc &&
 ln -s sh2-elf-gcc "$PREFIX"/bin/sh2-elf-cc &&
 
 cd .. || exit 1
-
-if [ $(id -u) -eq 0 ]
-then
-	echo install mercurial
-	wget https://www.mercurial-scm.org/release/mercurial-6.4.2.tar.gz &&
-	tar -zxvf mercurial-6.4.2.tar.gz &&
-	cd mercurial-6.4.2 &&
-
-	make install &&
-
-	cd .. || exit 1
-fi
