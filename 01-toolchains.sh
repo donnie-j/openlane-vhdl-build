@@ -289,3 +289,464 @@ make install-strip-target-libgcc &&
 ln -s sh2-elf-gcc "$PREFIX"/bin/sh2-elf-cc &&
 
 cd .. || exit 1
+
+echo building a bare sh2-j1-elf binutils
+
+mkdir nomult-binutils &&
+cd nomult-binutils &&
+
+../musl-cross-make/build/local/sh2eb-linux-muslfdpic/src_binutils/configure --prefix=$PREFIX  --enable-deterministic-archives --target=sh2-j1-elf --disable-separate-code --disable-werror &&
+make -j12 &&
+
+echo install bare metal binutils &&
+make install &&
+cd .. || exit 1
+
+echo patching gcc for nomult
+
+(cd musl-cross-make ; patch --follow-symlinks -p0 ) << 'EOF' &&
+diff -urN gcc-9.4.0.orig/gcc/config/sh/sh.md /home/jeff/work/j1-tools/musl-cross-make/gcc-9.4.0.orig/gcc/config/sh/sh.md
+--- gcc-9.4.0.orig/gcc/config/sh/sh.md	2021-06-01 07:53:04.636473777 +0000
++++ /home/jeff/work/j1-tools/musl-cross-make/gcc-9.4.0.orig/gcc/config/sh/sh.md	2024-09-12 05:11:58.930801166 +0000
+@@ -2445,285 +2445,6 @@
+ ;; Multiplication instructions
+ ;; -------------------------------------------------------------------------
+ 
+-(define_insn_and_split "mulhisi3"
+-  [(set (match_operand:SI 0 "arith_reg_dest")
+-	(mult:SI (sign_extend:SI (match_operand:HI 1 "arith_reg_operand"))
+-		 (sign_extend:SI (match_operand:HI 2 "arith_reg_operand"))))
+-   (clobber (reg:SI MACL_REG))]
+-  "TARGET_SH1 && can_create_pseudo_p ()"
+-  "#"
+-  "&& 1"
+-  [(set (reg:SI MACL_REG) (mult:SI (sign_extend:SI (match_dup 1))
+-				   (sign_extend:SI (match_dup 2))))
+-   (set (match_dup 0) (reg:SI MACL_REG))])
+-
+-(define_insn_and_split "umulhisi3"
+-  [(set (match_operand:SI 0 "arith_reg_dest")
+-	(mult:SI (zero_extend:SI (match_operand:HI 1 "arith_reg_operand"))
+-		 (zero_extend:SI (match_operand:HI 2 "arith_reg_operand"))))
+-   (clobber (reg:SI MACL_REG))]
+-  "TARGET_SH1 && can_create_pseudo_p ()"
+-  "#"
+-  "&& 1"
+-  [(set (reg:SI MACL_REG) (mult:SI (zero_extend:SI (match_dup 1))
+-				   (zero_extend:SI (match_dup 2))))
+-   (set (match_dup 0) (reg:SI MACL_REG))])
+-
+-(define_insn "umulhisi3_i"
+-  [(set (reg:SI MACL_REG)
+-	(mult:SI (zero_extend:SI
+-		  (match_operand:HI 0 "arith_reg_operand" "r"))
+-		 (zero_extend:SI
+-		  (match_operand:HI 1 "arith_reg_operand" "r"))))]
+-  "TARGET_SH1"
+-  "mulu.w	%1,%0"
+-  [(set_attr "type" "smpy")])
+-
+-(define_insn "mulhisi3_i"
+-  [(set (reg:SI MACL_REG)
+-	(mult:SI (sign_extend:SI
+-		  (match_operand:HI 0 "arith_reg_operand" "r"))
+-		 (sign_extend:SI
+-		  (match_operand:HI 1 "arith_reg_operand" "r"))))]
+-  "TARGET_SH1"
+-  "muls.w	%1,%0"
+-  [(set_attr "type" "smpy")])
+-
+-
+-;; mulsi3 on the SH2 can be done in one instruction, on the SH1 we generate
+-;; a call to a routine which clobbers known registers.
+-(define_insn "mulsi3_call"
+-  [(set (match_operand:SI 1 "register_operand" "=z")
+-	(mult:SI (reg:SI R4_REG) (reg:SI R5_REG)))
+-   (clobber (reg:SI MACL_REG))
+-   (clobber (reg:SI T_REG))
+-   (clobber (reg:SI PR_REG))
+-   (clobber (reg:SI R3_REG))
+-   (clobber (reg:SI R2_REG))
+-   (clobber (reg:SI R1_REG))
+-   (use (match_operand:SI 0 "arith_reg_operand" "r"))]
+-  "TARGET_SH1"
+-  "jsr	@%0%#"
+-  [(set_attr "type" "sfunc")
+-   (set_attr "needs_delay_slot" "yes")])
+-
+-(define_insn "mul_r"
+-  [(set (match_operand:SI 0 "arith_reg_dest" "=r")
+-	(mult:SI (match_operand:SI 1 "arith_reg_operand" "0")
+-		 (match_operand:SI 2 "arith_reg_operand" "z")))]
+-  "TARGET_SH2A"
+-  "mulr	%2,%0"
+-  [(set_attr "type" "dmpy")])
+-
+-(define_insn "mul_l"
+-  [(set (reg:SI MACL_REG)
+-	(mult:SI (match_operand:SI 0 "arith_reg_operand" "r")
+-		 (match_operand:SI 1 "arith_reg_operand" "r")))]
+-  "TARGET_SH2"
+-  "mul.l	%1,%0"
+-  [(set_attr "type" "dmpy")])
+-
+-(define_insn_and_split "mulsi3_i"
+-  [(set (match_operand:SI 0 "arith_reg_dest")
+-	(mult:SI (match_operand:SI 1 "arith_reg_operand")
+-		 (match_operand:SI 2 "arith_reg_operand")))
+-   (clobber (reg:SI MACL_REG))]
+-  "TARGET_SH2 && can_create_pseudo_p ()"
+-  "#"
+-  "&& 1"
+-  [(set (reg:SI MACL_REG) (mult:SI (match_dup 1) (match_dup 2)))
+-   (set (match_dup 0) (reg:SI MACL_REG))])
+-
+-(define_expand "mulsi3"
+-  [(set (match_operand:SI 0 "arith_reg_dest")
+-	(mult:SI (match_operand:SI 1 "arith_reg_operand")
+-		 (match_operand:SI 2 "arith_reg_operand")))]
+-  "TARGET_SH1"
+-{
+-  if (!TARGET_SH2)
+-    {
+-      emit_move_insn (gen_rtx_REG (SImode, R4_REG), operands[1]);
+-      emit_move_insn (gen_rtx_REG (SImode, R5_REG), operands[2]);
+-
+-      rtx sym = function_symbol (NULL, "__mulsi3", SFUNC_STATIC).sym;
+-
+-      emit_insn (gen_mulsi3_call (force_reg (SImode, sym), operands[0]));
+-    }
+-  else
+-    {
+-      /* FIXME: For some reason, expanding the mul_l insn and the macl store
+-	 insn early gives slightly better code.  In particular it prevents
+-	 the decrement-test loop type to be used in some cases which saves
+-	 one multiplication in the loop setup code.
+-
+-         emit_insn (gen_mulsi3_i (operands[0], operands[1], operands[2]));
+-      */
+-
+-      emit_insn (gen_mul_l (operands[1], operands[2]));
+-      emit_move_insn (operands[0], gen_rtx_REG (SImode, MACL_REG));
+-    }
+-  DONE;
+-})
+-
+-(define_insn "mulsidi3_i"
+-  [(set (reg:SI MACH_REG)
+-	(truncate:SI
+-	 (lshiftrt:DI
+-	  (mult:DI
+-	   (sign_extend:DI (match_operand:SI 0 "arith_reg_operand" "r"))
+-	   (sign_extend:DI (match_operand:SI 1 "arith_reg_operand" "r")))
+-	  (const_int 32))))
+-   (set (reg:SI MACL_REG)
+-	(mult:SI (match_dup 0)
+-		 (match_dup 1)))]
+-  "TARGET_SH2"
+-  "dmuls.l	%1,%0"
+-  [(set_attr "type" "dmpy")])
+-
+-(define_expand "mulsidi3"
+-  [(set (match_operand:DI 0 "arith_reg_dest")
+-	(mult:DI (sign_extend:DI (match_operand:SI 1 "arith_reg_operand"))
+-		 (sign_extend:DI (match_operand:SI 2 "arith_reg_operand"))))]
+-  "TARGET_SH2"
+-{
+-  emit_insn (gen_mulsidi3_compact (operands[0], operands[1], operands[2]));
+-  DONE;
+-})
+-
+-(define_insn_and_split "mulsidi3_compact"
+-  [(set (match_operand:DI 0 "arith_reg_dest")
+-	(mult:DI (sign_extend:DI (match_operand:SI 1 "arith_reg_operand"))
+-		 (sign_extend:DI (match_operand:SI 2 "arith_reg_operand"))))
+-   (clobber (reg:SI MACH_REG))
+-   (clobber (reg:SI MACL_REG))]
+-  "TARGET_SH2 && can_create_pseudo_p ()"
+-  "#"
+-  "&& 1"
+-  [(const_int 0)]
+-{
+-  rtx low_dst = gen_lowpart (SImode, operands[0]);
+-  rtx high_dst = gen_highpart (SImode, operands[0]);
+-
+-  emit_insn (gen_mulsidi3_i (operands[1], operands[2]));
+-
+-  emit_move_insn (low_dst, gen_rtx_REG (SImode, MACL_REG));
+-  emit_move_insn (high_dst, gen_rtx_REG (SImode, MACH_REG));
+-  /* We need something to tag the possible REG_EQUAL notes on to.  */
+-  emit_move_insn (operands[0], operands[0]);
+-  DONE;
+-})
+-
+-(define_insn "umulsidi3_i"
+-  [(set (reg:SI MACH_REG)
+-	(truncate:SI
+-	 (lshiftrt:DI
+-	  (mult:DI
+-	   (zero_extend:DI (match_operand:SI 0 "arith_reg_operand" "r"))
+-	   (zero_extend:DI (match_operand:SI 1 "arith_reg_operand" "r")))
+-	  (const_int 32))))
+-   (set (reg:SI MACL_REG)
+-	(mult:SI (match_dup 0)
+-		 (match_dup 1)))]
+-  "TARGET_SH2"
+-  "dmulu.l	%1,%0"
+-  [(set_attr "type" "dmpy")])
+-
+-(define_expand "umulsidi3"
+-  [(set (match_operand:DI 0 "arith_reg_dest")
+-	(mult:DI (zero_extend:DI (match_operand:SI 1 "arith_reg_operand"))
+-		 (zero_extend:DI (match_operand:SI 2 "arith_reg_operand"))))]
+-  "TARGET_SH2"
+-{
+-  emit_insn (gen_umulsidi3_compact (operands[0], operands[1], operands[2]));
+-  DONE;
+-})
+-
+-(define_insn_and_split "umulsidi3_compact"
+-  [(set (match_operand:DI 0 "arith_reg_dest")
+-	(mult:DI (zero_extend:DI (match_operand:SI 1 "arith_reg_operand"))
+-		 (zero_extend:DI (match_operand:SI 2 "arith_reg_operand"))))
+-   (clobber (reg:SI MACH_REG))
+-   (clobber (reg:SI MACL_REG))]
+-  "TARGET_SH2 && can_create_pseudo_p ()"
+-  "#"
+-  "&& 1"
+-  [(const_int 0)]
+-{
+-  rtx low_dst = gen_lowpart (SImode, operands[0]);
+-  rtx high_dst = gen_highpart (SImode, operands[0]);
+-
+-  emit_insn (gen_umulsidi3_i (operands[1], operands[2]));
+-
+-  emit_move_insn (low_dst, gen_rtx_REG (SImode, MACL_REG));
+-  emit_move_insn (high_dst, gen_rtx_REG (SImode, MACH_REG));
+-  /* We need something to tag the possible REG_EQUAL notes on to.  */
+-  emit_move_insn (operands[0], operands[0]);
+-  DONE;
+-})
+-
+-(define_insn "smulsi3_highpart_i"
+-  [(set (reg:SI MACH_REG)
+-	(truncate:SI
+-	 (lshiftrt:DI
+-	  (mult:DI
+-	   (sign_extend:DI (match_operand:SI 0 "arith_reg_operand" "r"))
+-	   (sign_extend:DI (match_operand:SI 1 "arith_reg_operand" "r")))
+-	  (const_int 32))))
+-   (clobber (reg:SI MACL_REG))]
+-  "TARGET_SH2"
+-  "dmuls.l	%1,%0"
+-  [(set_attr "type" "dmpy")])
+-
+-(define_insn_and_split "smulsi3_highpart"
+-  [(set (match_operand:SI 0 "arith_reg_dest")
+-	(truncate:SI
+-	  (lshiftrt:DI
+-	    (mult:DI
+-	      (sign_extend:DI (match_operand:SI 1 "arith_reg_operand"))
+-	      (sign_extend:DI (match_operand:SI 2 "arith_reg_operand")))
+-	  (const_int 32))))
+-   (clobber (reg:SI MACL_REG))
+-   (clobber (reg:SI MACH_REG))]
+-  "TARGET_SH2 && can_create_pseudo_p ()"
+-  "#"
+-  "&& 1"
+-  [(const_int 0)]
+-{
+-  emit_insn (gen_smulsi3_highpart_i (operands[1], operands[2]));
+-  emit_move_insn (operands[0], gen_rtx_REG (SImode, MACH_REG));
+-})
+-
+-(define_insn "umulsi3_highpart_i"
+-  [(set (reg:SI MACH_REG)
+-	(truncate:SI
+-	 (lshiftrt:DI
+-	  (mult:DI
+-	   (zero_extend:DI (match_operand:SI 0 "arith_reg_operand" "r"))
+-	   (zero_extend:DI (match_operand:SI 1 "arith_reg_operand" "r")))
+-	  (const_int 32))))
+-   (clobber (reg:SI MACL_REG))]
+-  "TARGET_SH2"
+-  "dmulu.l	%1,%0"
+-  [(set_attr "type" "dmpy")])
+-
+-(define_insn_and_split "umulsi3_highpart"
+-  [(set (match_operand:SI 0 "arith_reg_dest")
+-	(truncate:SI
+-	  (lshiftrt:DI
+-	    (mult:DI
+-	      (zero_extend:DI (match_operand:SI 1 "arith_reg_operand"))
+-	      (zero_extend:DI (match_operand:SI 2 "arith_reg_operand")))
+-	  (const_int 32))))
+-   (clobber (reg:SI MACL_REG))]
+-  "TARGET_SH2 && can_create_pseudo_p ()"
+-  "#"
+-  "&& 1"
+-  [(const_int 0)]
+-{
+-  emit_insn (gen_umulsi3_highpart_i (operands[1], operands[2]));
+-  emit_move_insn (operands[0], gen_rtx_REG (SImode, MACH_REG));
+-})
+-
+ ;; -------------------------------------------------------------------------
+ ;; Logical operations
+ ;; -------------------------------------------------------------------------
+diff -urN gcc-9.4.0.orig/include/longlong.h /home/jeff/work/j1-tools/musl-cross-make/gcc-9.4.0.orig/include/longlong.h
+--- gcc-9.4.0.orig/include/longlong.h	2021-06-01 07:53:06.264494051 +0000
++++ /home/jeff/work/j1-tools/musl-cross-make/gcc-9.4.0.orig/include/longlong.h	2024-09-15 04:37:26.492150251 +0000
+@@ -1105,14 +1105,11 @@
+ #if defined(__sh__) && W_TYPE_SIZE == 32
+ #ifndef __sh1__
+ #define umul_ppmm(w1, w0, u, v) \
+-  __asm__ (								\
+-       "dmulu.l	%2,%3\n\tsts%M1	macl,%1\n\tsts%M0	mach,%0"	\
+-	   : "=r<" ((USItype)(w1)),					\
+-	     "=r<" ((USItype)(w0))					\
+-	   : "r" ((USItype)(u)),					\
+-	     "r" ((USItype)(v))						\
+-	   : "macl", "mach")
+-#define UMUL_TIME 5
++  do { \
++    UDItype _i = muldi3(u, v); \
++    (w1) = __ll_highpart (_i); \
++    (w0) = __ll_lowpart  (_i); \
++  } while (0)
+ #endif
+ 
+ /* This is the same algorithm as __udiv_qrnnd_c.  */
+diff -urN gcc-9.4.0.orig/libgcc/config/sh/lib1funcs.S /home/jeff/work/j1-tools/musl-cross-make/gcc-9.4.0.orig/libgcc/config/sh/lib1funcs.S
+--- gcc-9.4.0.orig/libgcc/config/sh/lib1funcs.S	2021-06-01 07:53:06.376495444 +0000
++++ /home/jeff/work/j1-tools/musl-cross-make/gcc-9.4.0.orig/libgcc/config/sh/lib1funcs.S	2024-09-15 02:56:48.651403511 +0000
+@@ -964,40 +964,25 @@
+ 
+ #ifdef L_mulsi3
+ 
+-
+ 	.global	GLOBAL(mulsi3)
+ 	HIDDEN_FUNC(GLOBAL(mulsi3))
+ 
+-! r4 =       aabb
+-! r5 =       ccdd
+-! r0 = aabb*ccdd  via partial products
+-!
+-! if aa == 0 and cc = 0
+-! r0 = bb*dd
+-!
+-! else
+-! aa = bb*dd + (aa*dd*65536) + (cc*bb*65536)
+-!
+-
+ GLOBAL(mulsi3):
+-	mulu.w  r4,r5		! multiply the lsws  macl=bb*dd
+-	mov     r5,r3		! r3 = ccdd
+-	swap.w  r4,r2		! r2 = bbaa
+-	xtrct   r2,r3		! r3 = aacc
+-	tst  	r3,r3		! msws zero ?
+-	bf      hiset
+-	rts			! yes - then we have the answer
+-	sts     macl,r0
+-
+-hiset:	sts	macl,r0		! r0 = bb*dd
+-	mulu.w	r2,r5		! brewing macl = aa*dd
+-	sts	macl,r1
+-	mulu.w	r3,r4		! brewing macl = cc*bb
+-	sts	macl,r2
+-	add	r1,r2
+-	shll16	r2
+-	rts
+-	add	r2,r0
++	mov	r4,r0
++	mov	#0,r1
++.L2:
++	tst	r0,r0
++	bf	.L4
++	rts	
++	mov	r1,r0
++.L4:
++	tst	#1,r0
++	bt	.L3
++	add	r5,r1
++.L3:
++	shlr	r0
++	bra	.L2
++	add	r5,r5
+ 
+ 	ENDFUNC(GLOBAL(mulsi3))
+ #endif
+diff -urN gcc-9.4.0.orig/libgcc/config/sh/mulsi3.s /home/jeff/work/j1-tools/musl-cross-make/gcc-9.4.0.orig/libgcc/config/sh/mulsi3.s
+--- gcc-9.4.0.orig/libgcc/config/sh/mulsi3.s	1970-01-01 00:00:00.000000000 +0000
++++ /home/jeff/work/j1-tools/musl-cross-make/gcc-9.4.0.orig/libgcc/config/sh/mulsi3.s	2024-09-12 05:44:44.043248720 +0000
+@@ -0,0 +1,24 @@
++	.file	"mulsi3.c"
++	.text
++	.text
++	.align 1
++	.global	___mulsi3
++	.type	___mulsi3, @function
++___mulsi3:
++	mov	r4,r0
++	mov	#0,r1
++.L2:
++	tst	r0,r0
++	bf	.L4
++	rts	
++	mov	r1,r0
++.L4:
++	tst	#1,r0
++	bt	.L3
++	add	r5,r1
++.L3:
++	shlr	r0
++	bra	.L2
++	add	r5,r5
++	.size	___mulsi3, .-___mulsi3
++	.ident	"GCC: (GNU) 9.4.0"
+diff -urN gcc-9.4.0.orig/libgcc/libgcc2.c /home/jeff/work/j1-tools/musl-cross-make/gcc-9.4.0.orig/libgcc/libgcc2.c
+--- gcc-9.4.0.orig/libgcc/libgcc2.c	2021-06-01 07:53:06.384495544 +0000
++++ /home/jeff/work/j1-tools/musl-cross-make/gcc-9.4.0.orig/libgcc/libgcc2.c	2024-09-15 03:46:23.846359130 +0000
+@@ -545,16 +545,17 @@
+ 
+ #ifdef L_muldi3
+ DWtype
+-__muldi3 (DWtype u, DWtype v)
++__muldi3 (DWtype a, DWtype b)
+ {
+-  const DWunion uu = {.ll = u};
+-  const DWunion vv = {.ll = v};
+-  DWunion w = {.ll = __umulsidi3 (uu.s.low, vv.s.low)};
++  DWtype out = 0, bb = b;
+ 
+-  w.s.high += ((UWtype) uu.s.low * (UWtype) vv.s.high
+-	       + (UWtype) uu.s.high * (UWtype) vv.s.low);
++  while (a) {
++    if (a&1) out += bb;
++    bb <<= 1;
++    a >>= 1;
++  }
+ 
+-  return w.ll;
++  return out;
+ }
+ #endif
+ 
+EOF
+
+echo building a nomult sh2-elf gcc for C language &&
+mkdir nomult-gcc &&
+cd nomult-gcc &&
+
+../musl-cross-make/build/local/sh2eb-linux-muslfdpic/src_gcc/configure --prefix=$PREFIX  --target=sh2-j1-elf --disable-bootstrap --disable-assembly --disable-werror --disable-libmudflap --disable-libsanitizer --disable-gnu-indirect-function --disable-libmpx --disable-libmudflap --disable-libstdcxx-pch --disable-ssp --disable-libssp --enable-languages=c,c++ --with-newlib --without-headers --disable-hosted-libstdcxx &&
+
+make -j12 all-gcc &&
+make -j12 all-target-libgcc &&
+
+echo install bare metal compiler &&
+make install-strip-gcc &&
+make install-strip-target-libgcc &&
+ln -s sh2-j1-elf-gcc "$PREFIX"/bin/sh2-j1-elf-cc &&
+
+cd .. || exit 1
+
