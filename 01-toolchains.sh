@@ -68,7 +68,7 @@ cat >> patches/musl-1.2.5/0001-nommu.patch << 'EOF' &&
 @@ -7,2 +7,3 @@
  
 +#ifndef __SH_FDPIC__
- static void dummy(int x)
+ static void dummy(int x) { }
 @@ -37,1 +38,2 @@
  }
 +#endif
@@ -597,7 +597,7 @@ diff -urN gcc-9.4.0.orig/gcc/config/sh/sh.md /home/jeff/work/j1-tools/musl-cross
 diff -urN gcc-9.4.0.orig/include/longlong.h /home/jeff/work/j1-tools/musl-cross-make/gcc-9.4.0.orig/include/longlong.h
 --- gcc-9.4.0.orig/include/longlong.h	2021-06-01 07:53:06.264494051 +0000
 +++ /home/jeff/work/j1-tools/musl-cross-make/gcc-9.4.0.orig/include/longlong.h	2024-09-15 04:37:26.492150251 +0000
-@@ -1105,14 +1105,11 @@
+@@ -1105,14 +1105,28 @@
  #if defined(__sh__) && W_TYPE_SIZE == 32
  #ifndef __sh1__
  #define umul_ppmm(w1, w0, u, v) \
@@ -610,9 +610,26 @@ diff -urN gcc-9.4.0.orig/include/longlong.h /home/jeff/work/j1-tools/musl-cross-
 -	   : "macl", "mach")
 -#define UMUL_TIME 5
 +  do { \
-+    UDItype _i = muldi3(u, v); \
-+    (w1) = __ll_highpart (_i); \
-+    (w0) = __ll_lowpart  (_i); \
++    UWtype __x0, __x1, __x2, __x3; \
++    UHWtype __ul, __vl, __uh, __vh; \
++ \
++    __ul = __ll_lowpart (u); \
++    __uh = __ll_highpart (u); \
++    __vl = __ll_lowpart (v); \
++    __vh = __ll_highpart (v); \
++ \
++    __x0 = __mulsi3 (__ul, __vl); \
++    __x1 = __mulsi3 (__ul, __vh); \
++    __x2 = __mulsi3 (__uh, __vl); \
++    __x3 = __mulsi3 (__uh, __vh); \
++ \
++    __x1 += __ll_highpart (__x0);/* this can't give carry */ \
++    __x1 += __x2; /* but this indeed can */ \
++    if (__x1 < __x2) /* did we get it? */ \
++      __x3 += __ll_B; /* yes, add it in the proper pos.  */ \
++ \
++    (w1) = __x3 + __ll_highpart (__x1); \
++    (w0) = __ll_lowpart (__x1) * __ll_B + __ll_lowpart (__x0); \
 +  } while (0)
  #endif
  
@@ -620,7 +637,7 @@ diff -urN gcc-9.4.0.orig/include/longlong.h /home/jeff/work/j1-tools/musl-cross-
 diff -urN gcc-9.4.0.orig/libgcc/config/sh/lib1funcs.S /home/jeff/work/j1-tools/musl-cross-make/gcc-9.4.0.orig/libgcc/config/sh/lib1funcs.S
 --- gcc-9.4.0.orig/libgcc/config/sh/lib1funcs.S	2021-06-01 07:53:06.376495444 +0000
 +++ /home/jeff/work/j1-tools/musl-cross-make/gcc-9.4.0.orig/libgcc/config/sh/lib1funcs.S	2024-09-15 02:56:48.651403511 +0000
-@@ -964,40 +964,25 @@
+@@ -964,40 +964,26 @@
  
  #ifdef L_mulsi3
  
@@ -640,6 +657,7 @@ diff -urN gcc-9.4.0.orig/libgcc/config/sh/lib1funcs.S /home/jeff/work/j1-tools/m
 -!
 -
  GLOBAL(mulsi3):
++ 	.weak  	GLOBAL(muldi3)
 -	mulu.w  r4,r5		! multiply the lsws  macl=bb*dd
 -	mov     r5,r3		! r3 = ccdd
 -	swap.w  r4,r2		! r2 = bbaa
@@ -676,34 +694,6 @@ diff -urN gcc-9.4.0.orig/libgcc/config/sh/lib1funcs.S /home/jeff/work/j1-tools/m
  
  	ENDFUNC(GLOBAL(mulsi3))
  #endif
-diff -urN gcc-9.4.0.orig/libgcc/config/sh/mulsi3.s /home/jeff/work/j1-tools/musl-cross-make/gcc-9.4.0.orig/libgcc/config/sh/mulsi3.s
---- gcc-9.4.0.orig/libgcc/config/sh/mulsi3.s	1970-01-01 00:00:00.000000000 +0000
-+++ /home/jeff/work/j1-tools/musl-cross-make/gcc-9.4.0.orig/libgcc/config/sh/mulsi3.s	2024-09-12 05:44:44.043248720 +0000
-@@ -0,0 +1,24 @@
-+	.file	"mulsi3.c"
-+	.text
-+	.text
-+	.align 1
-+	.global	___mulsi3
-+	.type	___mulsi3, @function
-+___mulsi3:
-+	mov	r4,r0
-+	mov	#0,r1
-+.L2:
-+	tst	r0,r0
-+	bf	.L4
-+	rts	
-+	mov	r1,r0
-+.L4:
-+	tst	#1,r0
-+	bt	.L3
-+	add	r5,r1
-+.L3:
-+	shlr	r0
-+	bra	.L2
-+	add	r5,r5
-+	.size	___mulsi3, .-___mulsi3
-+	.ident	"GCC: (GNU) 9.4.0"
 diff -urN gcc-9.4.0.orig/libgcc/libgcc2.c /home/jeff/work/j1-tools/musl-cross-make/gcc-9.4.0.orig/libgcc/libgcc2.c
 --- gcc-9.4.0.orig/libgcc/libgcc2.c	2021-06-01 07:53:06.384495544 +0000
 +++ /home/jeff/work/j1-tools/musl-cross-make/gcc-9.4.0.orig/libgcc/libgcc2.c	2024-09-15 03:46:23.846359130 +0000
