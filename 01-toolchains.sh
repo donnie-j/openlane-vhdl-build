@@ -740,3 +740,21 @@ ln -s sh2-j1-elf-gcc "$PREFIX"/bin/sh2-j1-elf-cc &&
 
 cd .. || exit 1
 
+PATH=$PATH:/opt/toolchains/bin
+
+echo Clone minimal-lib
+
+git clone http://10.0.0.2:3000/J-Core/minimal-lib.git
+
+cd minimal-lib
+make clean; CROSS_COMPILE=sh2-elf- make
+
+rm -f /opt/toolchains/lib/gcc/sh2-elf/*/*.o
+cp -va *.[oa] /opt/toolchains/sh2-elf/lib
+cp -rva include /opt/toolchains/sh2-elf
+
+make clean; CROSS_COMPILE=sh2-j1-elf- make
+
+rm -f /opt/toolchains/lib/gcc/sh2-j1-elf/*/*.o
+cp -va *.[oa] /opt/toolchains/sh2-j1-elf/lib
+cp -rva include /opt/toolchains/sh2-j1-elf
