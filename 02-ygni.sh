@@ -51,10 +51,8 @@ echo build yosys
 git clone --recursive ../src/yosys &&
 cd yosys &&
 
-#echo checking out v0.48 aaa5347494801e9e3870b31387da59da24233f76 &&
-#git checkout --recurse-submodules aaa5347494801e9e3870b31387da59da24233f76 &&
-echo checking out v0.50 &&
-git checkout --recurse-submodules v0.50 &&
+echo checking out v0.51 &&
+git checkout --recurse-submodules v0.51 &&
 
 patch -p1 << EOF &&
 diff --git a/Makefile b/Makefile
@@ -95,8 +93,6 @@ echo build ghdl
 git clone ../src/ghdl &&
 cd ghdl &&
 
-#echo checking out v4.1.0 7188e92cf3cc60f5d97cfe83bc2c85f0250373ab &&
-#git checkout --recurse-submodules 7188e92cf3cc60f5d97cfe83bc2c85f0250373ab &&
 echo checking out v5.0.1 &&
 git checkout --recurse-submodules v5.0.1 &&
 
@@ -114,6 +110,7 @@ echo build ghdl-yosys-plugin
 
 git clone ../src/ghdl-yosys-plugin &&
 cd ghdl-yosys-plugin &&
+git checkout --recurse-submodules 8c29f2cc7cc3b8c979acd02f543d25f321b55c30 &&
 
 export PATH=$PREFIX/bin:$PATH &&
 make &&
